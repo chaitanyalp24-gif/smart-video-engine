@@ -73,8 +73,13 @@ function createFallbackImage(width = 512, height = 512): Promise<HTMLImageElemen
 async function loadImage(url: string): Promise<HTMLImageElement> {
   try {
     let fetchUrl = url;
-    if (
+    const isLocalhost =
       typeof window !== "undefined" &&
+      (window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1");
+
+    if (
+      isLocalhost &&
       !url.startsWith("blob:") &&
       !url.startsWith("data:") &&
       !url.startsWith("/")
@@ -84,6 +89,21 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
 
     const resp = await fetch(fetchUrl);
     if (!resp.ok) {
+      if (fetchUrl !== url) {
+        try {
+          const directResp = await fetch(url);
+          if (directResp.ok) {
+            const b = await directResp.blob();
+            const bUrl = URL.createObjectURL(b);
+            const im = new Image();
+            return await new Promise<HTMLImageElement>((res) => {
+              im.onload = () => res(im);
+              im.onerror = async () => res(await createFallbackImage(512, 512));
+              im.src = bUrl;
+            });
+          }
+        } catch (_) {}
+      }
       console.warn(`[smart-video-engine] Image request failed (${resp.status}), using scenic fallback.`);
       return await createFallbackImage(512, 512);
     }

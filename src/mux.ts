@@ -33,8 +33,8 @@ interface FFmpegLike {
 }
 
 const DEFAULT_CORE_BASE_URL =
-  typeof window !== "undefined" && window.location.origin
-    ? `${window.location.origin}/vendor/core`
+  typeof import.meta !== "undefined" && import.meta.url
+    ? new URL("../vendor/core", import.meta.url).href
     : "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
 
 /**

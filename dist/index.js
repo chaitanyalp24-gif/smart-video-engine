@@ -232,8 +232,13 @@ function createFallbackImage(width = 512, height = 512) {
 async function loadImage(url) {
   try {
     let fetchUrl = url;
-    if (
+    const isLocalhost =
       typeof window !== "undefined" &&
+      (window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1");
+
+    if (
+      isLocalhost &&
       !url.startsWith("blob:") &&
       !url.startsWith("data:") &&
       !url.startsWith("/")
@@ -243,6 +248,21 @@ async function loadImage(url) {
 
     const resp = await fetch(fetchUrl);
     if (!resp.ok) {
+      if (fetchUrl !== url) {
+        try {
+          const directResp = await fetch(url);
+          if (directResp.ok) {
+            const b = await directResp.blob();
+            const bUrl = URL.createObjectURL(b);
+            const im = new Image();
+            return await new Promise((res) => {
+              im.onload = () => res(im);
+              im.onerror = async () => res(await createFallbackImage(512, 512));
+              im.src = bUrl;
+            });
+          }
+        } catch (_) {}
+      }
       console.warn(`[smart-video-engine] Image request failed (${resp.status}), using scenic fallback.`);
       return await createFallbackImage(512, 512);
     }
@@ -360,8 +380,8 @@ export async function composeFrames(scenes, options = {}) {
 
 // --- mux ---
 const DEFAULT_CORE_BASE_URL =
-  typeof window !== "undefined" && window.location.origin
-    ? `${window.location.origin}/vendor/core`
+  typeof import.meta !== "undefined" && import.meta.url
+    ? new URL("../vendor/core", import.meta.url).href
     : "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
 
 export async function muxFramesToMp4(frames, audioWav, options) {
