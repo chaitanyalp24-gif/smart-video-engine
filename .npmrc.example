@@ -1,0 +1,8 @@
+# Same idea as smart-image-engine: rename this to .npmrc and point `cache`
+# at a folder that survives between lab sessions (USB stick, synced cloud
+# folder) so npm reuses its package cache instead of re-fetching everything
+# on a fresh machine profile.
+#
+# cache=D:\npm-cache
+
+cache=./.npm-cache-portable
