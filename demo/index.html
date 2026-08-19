@@ -30,7 +30,7 @@
     font-family: var(--font-sans);
     line-height: 1.6;
     padding: 2rem 1rem;
-    max-width: 880px;
+    max-width: 900px;
     margin: 0 auto;
   }
 
@@ -42,9 +42,9 @@
   }
 
   h1 {
-    font-size: 2.2rem;
+    font-size: 2.3rem;
     font-weight: 700;
-    background: linear-gradient(135deg, #58a6ff 0%, #bc8cff 100%);
+    background: linear-gradient(135deg, #58a6ff 0%, #bc8cff 50%, #3fb950 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 0.5rem;
@@ -99,7 +99,7 @@
 
   label {
     display: block;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: 600;
     color: var(--text-secondary);
     margin-bottom: 0.4rem;
@@ -149,7 +149,7 @@
 
   .settings-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 1rem;
     margin-top: 1rem;
   }
@@ -194,8 +194,8 @@
     background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
     color: white;
     font-weight: 600;
-    font-size: 1rem;
-    padding: 0.85rem 1.75rem;
+    font-size: 1.05rem;
+    padding: 0.9rem 1.75rem;
     border: 1px solid rgba(255,255,255,0.1);
     border-radius: 6px;
     cursor: pointer;
@@ -238,13 +238,13 @@
   .progress-bar {
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, #58a6ff, #bc8cff);
+    background: linear-gradient(90deg, #58a6ff, #bc8cff, #3fb950);
     transition: width 0.3s ease;
   }
 
   .steps-list {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
     gap: 0.5rem;
     margin-top: 1rem;
   }
@@ -382,7 +382,7 @@
 
   <header>
     <h1>🎬 smart-video-engine</h1>
-    <p class="subtitle">Client-Side AI Script-to-Video Engine (Pollinations + Kokoro TTS + Canvas Pan/Zoom + ffmpeg.wasm)</p>
+    <p class="subtitle">Client-Side AI Script-to-Video Studio (Multi-Model AI, Neural TTS, Ken Burns, Subtitles & BGM)</p>
     <div class="capabilities-bar">
       <span class="badge" id="badgeCoop">🔒 Isolation: Checking...</span>
       <span class="badge" id="badgeGpu">⚡ WebGPU: Checking...</span>
@@ -392,7 +392,7 @@
 
   <!-- Input Section -->
   <div class="card">
-    <div class="card-title">📝 Video Script & Settings</div>
+    <div class="card-title">📝 Video Script & Studio Settings</div>
     
     <label for="script">Enter Narration Script</label>
     <textarea id="script" rows="4">A lone fox walks through a quiet snowy forest at dawn. Sunlight breaks through tall frosted trees, casting long golden shadows. In the distance, a crystal-clear river sparkles under the crisp morning air.</textarea>
@@ -420,6 +420,48 @@
       </div>
 
       <div>
+        <label for="subtitlesSelect">Subtitle Overlay</label>
+        <select id="subtitlesSelect">
+          <option value="pill" selected>Pill (Modern Translucent)</option>
+          <option value="cinematic">Cinematic Yellow</option>
+          <option value="karaoke">Karaoke Word Glow</option>
+          <option value="none">None (No Subtitles)</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="bgmSelect">Background Music (BGM)</label>
+        <select id="bgmSelect">
+          <option value="ambient" selected>Ambient Pad (Calm)</option>
+          <option value="lofi">Lo-Fi Chill (Warm)</option>
+          <option value="cinematic">Cinematic Strings</option>
+          <option value="none">None (Voice Only)</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="stylePresetSelect">Visual Style</label>
+        <select id="stylePresetSelect">
+          <option value="cinematic" selected>Cinematic (8k)</option>
+          <option value="photorealistic">Photorealistic</option>
+          <option value="anime">Anime (Ghibli / Shinkai)</option>
+          <option value="cyberpunk">Cyberpunk Neon</option>
+          <option value="fantasy">Ethereal Fantasy</option>
+          <option value="none">Raw Text</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="visualSourceSelect">Visual Source</label>
+        <select id="visualSourceSelect">
+          <option value="pollinations" selected>Pollinations AI (Default)</option>
+          <option value="flux">FLUX.1 Model</option>
+          <option value="anime_model">Anime Model</option>
+          <option value="stock">Pixabay Stock Keyword</option>
+        </select>
+      </div>
+
+      <div>
         <label for="resolutionSelect">Video Resolution</label>
         <select id="resolutionSelect">
           <option value="512" selected>512 x 512 (Fastest)</option>
@@ -433,6 +475,7 @@
         <select id="fpsSelect">
           <option value="15">15 FPS (Fast Encode)</option>
           <option value="24" selected>24 FPS (Cinematic)</option>
+          <option value="30">30 FPS (Smooth)</option>
         </select>
       </div>
 
@@ -467,8 +510,8 @@
     <div class="steps-list">
       <div class="step-item" id="stepSplit">1. ✂️ Scenes</div>
       <div class="step-item" id="stepVoice">2. 🗣️ Voice TTS</div>
-      <div class="step-item" id="stepImage">3. 🎨 AI Images</div>
-      <div class="step-item" id="stepCanvas">4. 🎬 Pan/Zoom</div>
+      <div class="step-item" id="stepImage">3. 🎨 Visuals</div>
+      <div class="step-item" id="stepCanvas">4. 🎬 Canvas & Subs</div>
       <div class="step-item" id="stepMux">5. 🎞️ MP4 Mux</div>
     </div>
   </div>
@@ -498,7 +541,12 @@
   </div>
 
   <script type="module">
-    import { SmartVideoEngine, splitScript } from "../dist/index.js";
+    import {
+      SmartVideoEngine,
+      splitScript,
+      createPollinationsImageProvider,
+      createPixabayImageProvider
+    } from "../dist/index.js";
 
     const PRESETS = {
       fox: "A lone fox walks through a quiet snowy forest at dawn. Sunlight breaks through tall frosted trees, casting long golden shadows. In the distance, a crystal-clear river sparkles under the crisp morning air.",
@@ -540,7 +588,7 @@
         coopBadge.textContent = "🔒 Isolation: Enabled (COOP/COEP)";
       } else {
         coopBadge.className = "badge warn";
-        coopBadge.textContent = "⚠️ Isolation: Not isolated (Need COOP/COEP server)";
+        coopBadge.textContent = "⚠️ Isolation: Not isolated (Need COOP/COEP)";
       }
 
       const gpuBadge = document.getElementById("badgeGpu");
@@ -597,6 +645,10 @@
       }
 
       const voice = document.getElementById("voiceSelect").value;
+      const subtitles = document.getElementById("subtitlesSelect").value;
+      const bgm = document.getElementById("bgmSelect").value;
+      const style = document.getElementById("stylePresetSelect").value;
+      const visualSource = document.getElementById("visualSourceSelect").value;
       const res = parseInt(document.getElementById("resolutionSelect").value, 10);
       const fps = parseInt(document.getElementById("fpsSelect").value, 10);
       const sentencesPerScene = parseInt(document.getElementById("sentencesPerScene").value, 10);
@@ -606,19 +658,35 @@
       pipelineStatusCard.style.display = "block";
       resultCard.style.display = "none";
       scenesGrid.innerHTML = "";
-      logEl.textContent = "Starting Smart Video Engine pipeline...\n";
+      logEl.textContent = "Starting Smart Video Engine Studio pipeline...\n";
 
       [stepSplit, stepVoice, stepImage, stepCanvas, stepMux].forEach(s => s.className = "step-item");
       progressBar.style.width = "5%";
 
       try {
+        // Configure image provider based on selection
+        let imageProvider;
+        if (visualSource === "flux") {
+          imageProvider = createPollinationsImageProvider({ width: res, height: res, model: "flux" });
+        } else if (visualSource === "anime_model") {
+          imageProvider = createPollinationsImageProvider({ width: res, height: res, model: "anime" });
+        } else if (visualSource === "stock") {
+          imageProvider = createPixabayImageProvider({ width: res, height: res });
+        } else {
+          imageProvider = createPollinationsImageProvider({ width: res, height: res });
+        }
+
         const engine = new SmartVideoEngine({
           voice,
           mockVoice,
           width: res,
           height: res,
           fps,
-          sceneSplitter: (text) => splitScript(text, { sentencesPerScene }),
+          subtitles,
+          bgm,
+          style,
+          imageProvider,
+          sceneSplitter: (text) => splitScript(text, { sentencesPerScene, style }),
           onProgress: (stage, detail) => {
             const detailStr = detail ? ` — ${detail}` : "";
             statusLabel.textContent = `${stage}${detailStr}`;
@@ -643,7 +711,7 @@
               setStep("voice", "completed");
               setStep("canvas", "active");
               progressBar.style.width = "75%";
-            } else if (stage === "muxing-video") {
+            } else if (stage === "mixing-audio" || stage === "muxing-video") {
               setStep("canvas", "completed");
               setStep("mux", "active");
               progressBar.style.width = "90%";

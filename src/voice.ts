@@ -93,12 +93,11 @@ export class VoiceGenerator {
     return this.tts.list_voices();
   }
 
-  /** Generates narration audio for a single scene of text. */
   async generate(text: string): Promise<VoiceSegment> {
     if (this.tts) {
       try {
         const audio = await this.tts.generate(text, { voice: this.voice });
-        const wav = audio.toWav();
+        const wav = await toWavArrayBuffer(audio);
 
         return {
           text,
@@ -146,6 +145,39 @@ export class VoiceGenerator {
       return false;
     }
   }
+}
+
+async function toWavArrayBuffer(audio: unknown): Promise<ArrayBuffer> {
+  if (!audio) throw new Error("No audio returned from TTS");
+  const a = audio as Record<string, unknown>;
+
+  // 1. Try audio.toWav()
+  if (typeof a.toWav === "function") {
+    const res = (a.toWav as () => unknown)();
+    if (res instanceof ArrayBuffer) return res;
+    if (res instanceof Uint8Array) return res.buffer.slice(res.byteOffset, res.byteOffset + res.byteLength);
+    if (res && typeof (res as Record<string, unknown>).arrayBuffer === "function") {
+      return await ((res as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer());
+    }
+    if (res instanceof Blob) return await new Response(res).arrayBuffer();
+  }
+
+  // 2. Try audio.toBlob()
+  if (typeof a.toBlob === "function") {
+    const blob = (a.toBlob as () => Blob)();
+    if (blob && typeof blob.arrayBuffer === "function") return await blob.arrayBuffer();
+    return await new Response(blob).arrayBuffer();
+  }
+
+  // 3. Try audio.arrayBuffer()
+  if (typeof a.arrayBuffer === "function") {
+    return await ((a as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer());
+  }
+
+  if (audio instanceof ArrayBuffer) return audio;
+  if (audio instanceof Uint8Array) return audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength);
+
+  throw new Error("Unable to extract WAV ArrayBuffer from TTS audio output");
 }
 
 /** Reads a standard WAV header to compute duration without decoding the full buffer. */

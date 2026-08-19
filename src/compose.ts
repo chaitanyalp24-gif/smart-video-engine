@@ -1,38 +1,38 @@
 /**
  * compose
  * -------
- * Renders each scene's image onto a canvas across its narration duration,
- * applying a Ken-Burns-style pan/zoom and a cross-fade at scene boundaries,
- * and exports the sequence as PNG frames ready for ffmpeg.wasm to encode.
- *
- * This is pure canvas/browser code — it needs a real DOM (document,
- * HTMLCanvasElement, Image) and cannot run in Node or be verified outside
- * an actual browser.
+ * Composites scene images and synchronized text subtitles onto an HTML5
+ * Canvas with Ken Burns pan/zoom animation, transitions, and export to PNG frames.
  */
 
 export interface ComposeOptions {
-  /** Output frame width in pixels. Default: 1024 */
+  /** Output frame width in pixels. Default: 1024. */
   width?: number;
-  /** Output frame height in pixels. Default: 1024 */
+  /** Output frame height in pixels. Default: 1024. */
   height?: number;
-  /** Frames per second for the output video. Default: 24 */
+  /** Frame rate for animation. Default: 24. */
   fps?: number;
-  /** Fraction of each scene (0–0.5) spent cross-fading into the next. Default: 0.15 */
-  fadeFraction?: number;
-  /** Maximum zoom applied over the course of a scene (1.0 = no zoom). Default: 1.12 */
+  /** Maximum zoom scale factor for Ken Burns motion. Default: 1.15. */
   maxZoom?: number;
-  onProgress?: (renderedFrames: number, totalFrames: number) => void;
+  /** Subtitle styling. Default: "pill". */
+  subtitles?: "pill" | "cinematic" | "karaoke" | "none";
+  /** Enable smooth crossfade transition between scenes. Default: true */
+  crossfade?: boolean;
+  /** Called periodically with compositing progress. */
+  onProgress?: (currentFrame: number, totalFrames: number) => void;
 }
 
 export interface SceneWithMedia {
-  /** URL (https:// or data:) of the scene's generated/stock image. */
+  /** Image URL (https:, blob:, or data:) generated for this scene. */
   imageUrl: string;
-  /** Narration duration in seconds for this scene, from VoiceSegment.durationSeconds. */
+  /** Narration text for subtitles and timing. */
+  text: string;
+  /** Narration duration in seconds for this scene. */
   durationSeconds: number;
 }
 
 export interface ComposedFrames {
-  /** PNG bytes for each frame, in order. Filenames follow frame%05d.png convention. */
+  /** PNG bytes for each frame, in order. */
   frames: Uint8Array[];
   fps: number;
   width: number;
@@ -46,9 +46,9 @@ function createFallbackImage(width = 512, height = 512): Promise<HTMLImageElemen
   const ctx = canvas.getContext("2d");
   if (ctx) {
     const grad = ctx.createLinearGradient(0, 0, width, height);
-    grad.addColorStop(0, "#1e3c72");
-    grad.addColorStop(0.5, "#2a5298");
-    grad.addColorStop(1, "#f77737");
+    grad.addColorStop(0, "#0f2027");
+    grad.addColorStop(0.5, "#203a43");
+    grad.addColorStop(1, "#2c5364");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 
@@ -126,16 +126,43 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
   }
 }
 
-/** Draws an image into a canvas with "cover" scaling, offset by a pan/zoom progress value. */
+/** Draws an image into a canvas with "cover" scaling and varied Ken Burns motion patterns. */
 function drawCoverFrame(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
   width: number,
   height: number,
   zoomProgress: number, // 0 -> 1 across the scene
-  maxZoom: number
+  maxZoom: number,
+  motionPatternIndex = 0
 ): void {
-  const zoom = 1 + (maxZoom - 1) * zoomProgress;
+  // 4 alternating motion patterns:
+  // 0: Zoom In & slow pan right
+  // 1: Zoom Out & slow pan left
+  // 2: Zoom In & tilt up
+  // 3: Pan left to right
+  const pattern = motionPatternIndex % 4;
+  let zoom = 1.0;
+  let panFactorX = 0;
+  let panFactorY = 0;
+
+  if (pattern === 0) {
+    zoom = 1 + (maxZoom - 1) * zoomProgress;
+    panFactorX = zoomProgress * 0.5 - 0.25;
+    panFactorY = zoomProgress * 0.3 - 0.15;
+  } else if (pattern === 1) {
+    zoom = maxZoom - (maxZoom - 1) * zoomProgress;
+    panFactorX = -zoomProgress * 0.5 + 0.25;
+    panFactorY = -zoomProgress * 0.3 + 0.15;
+  } else if (pattern === 2) {
+    zoom = 1 + (maxZoom - 1) * zoomProgress;
+    panFactorX = 0;
+    panFactorY = (1 - zoomProgress) * 0.4 - 0.2;
+  } else {
+    zoom = 1 + (maxZoom - 1) * 0.5;
+    panFactorX = (zoomProgress - 0.5) * 0.6;
+    panFactorY = 0;
+  }
 
   const imgRatio = img.width / img.height;
   const canvasRatio = width / height;
@@ -151,12 +178,10 @@ function drawCoverFrame(
     drawHeight = drawWidth / imgRatio;
   }
 
-  // Slow pan from top-left-biased to centered as zoom increases, for a
-  // subtle Ken Burns feel rather than a static center-zoom.
   const maxOffsetX = (drawWidth - width) / 2;
   const maxOffsetY = (drawHeight - height) / 2;
-  const panX = -maxOffsetX + maxOffsetX * 2 * (zoomProgress * 0.5);
-  const panY = -maxOffsetY + maxOffsetY * 2 * (zoomProgress * 0.5);
+  const panX = maxOffsetX * panFactorX;
+  const panY = maxOffsetY * panFactorY;
 
   const x = (width - drawWidth) / 2 + panX;
   const y = (height - drawHeight) / 2 + panY;
@@ -164,77 +189,215 @@ function drawCoverFrame(
   ctx.drawImage(img, x, y, drawWidth, drawHeight);
 }
 
+/** Draws stylish burned-in subtitles with word wrapping and optional karaoke highlight. */
+function drawSubtitles(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  progress: number, // 0 to 1 in scene
+  width: number,
+  height: number,
+  style: ComposeOptions["subtitles"] = "pill"
+): void {
+  if (style === "none" || !text.trim()) return;
+
+  const fontSize = Math.max(18, Math.round(width * 0.038));
+  ctx.save();
+  ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const words = text.trim().split(/\s+/);
+  const maxLineWidth = width * 0.85;
+
+  // Wrap words into lines
+  const lines: string[] = [];
+  let currentLine = "";
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    if (ctx.measureText(testLine).width > maxLineWidth) {
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+
+  const lineHeight = fontSize * 1.35;
+  const totalTextHeight = lines.length * lineHeight;
+  const bottomMargin = height * 0.12;
+  const startY = height - bottomMargin - totalTextHeight / 2;
+
+  // Active word index for karaoke
+  const activeWordIdx = Math.floor(progress * words.length);
+
+  lines.forEach((line, lineIdx) => {
+    const y = startY + lineIdx * lineHeight;
+    const lineWidth = ctx.measureText(line).width;
+    const x = width / 2;
+
+    if (style === "pill") {
+      // Dark rounded pill background
+      const paddingX = fontSize * 0.7;
+      const paddingY = fontSize * 0.25;
+      const rectX = x - lineWidth / 2 - paddingX;
+      const rectY = y - lineHeight / 2 - paddingY;
+      const rectW = lineWidth + paddingX * 2;
+      const rectH = lineHeight + paddingY * 2;
+      const radius = 8;
+
+      ctx.fillStyle = "rgba(10, 15, 25, 0.72)";
+      ctx.beginPath();
+      ctx.roundRect
+        ? ctx.roundRect(rectX, rectY, rectW, rectH, radius)
+        : ctx.rect(rectX, rectY, rectW, rectH);
+      ctx.fill();
+
+      // Border glow
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // White text
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(line, x, y);
+
+    } else if (style === "cinematic") {
+      // Bold text with drop shadow
+      ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 3;
+
+      ctx.fillStyle = "#ffeb3b"; // Cinematic warm yellow
+      ctx.fillText(line, x, y);
+
+    } else if (style === "karaoke") {
+      // Draw pill background
+      const paddingX = fontSize * 0.7;
+      const paddingY = fontSize * 0.25;
+      const rectX = x - lineWidth / 2 - paddingX;
+      const rectY = y - lineHeight / 2 - paddingY;
+      const rectW = lineWidth + paddingX * 2;
+      const rectH = lineHeight + paddingY * 2;
+
+      ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+      ctx.beginPath();
+      ctx.roundRect
+        ? ctx.roundRect(rectX, rectY, rectW, rectH, 6)
+        : ctx.rect(rectX, rectY, rectW, rectH);
+      ctx.fill();
+
+      // Draw word by word with active highlight
+      const lineWords = line.split(/\s+/);
+      let curX = x - lineWidth / 2;
+      ctx.textAlign = "left";
+
+      lineWords.forEach((word) => {
+        const wordWidth = ctx.measureText(word).width;
+        const spaceWidth = ctx.measureText(" ").width;
+
+        // Is this word currently active?
+        const isCurrent = words[activeWordIdx] === word;
+
+        if (isCurrent) {
+          ctx.fillStyle = "#38ef7d"; // Neon highlight green
+          ctx.shadowColor = "rgba(56, 239, 125, 0.6)";
+          ctx.shadowBlur = 8;
+        } else {
+          ctx.fillStyle = "#ffffff";
+          ctx.shadowBlur = 0;
+        }
+
+        ctx.fillText(word, curX, y);
+        curX += wordWidth + spaceWidth;
+      });
+    }
+  });
+
+  ctx.restore();
+}
+
 /**
  * Renders every scene's image across its narration duration into a flat
- * sequence of PNG frames, with pan/zoom and cross-fade transitions.
- *
- * Requires a real browser DOM. Throws if `document` is unavailable.
+ * sequence of PNG frames, with pan/zoom, subtitles, and transitions.
  */
 export async function composeFrames(
   scenes: SceneWithMedia[],
   options: ComposeOptions = {}
 ): Promise<ComposedFrames> {
   if (typeof document === "undefined") {
-    throw new Error(
-      "composeFrames() requires a browser DOM (document, canvas, Image) and cannot run in Node."
-    );
+    throw new Error("composeFrames() requires a browser DOM and cannot run in Node.");
   }
 
   const width = options.width ?? 1024;
   const height = options.height ?? 1024;
   const fps = options.fps ?? 24;
-  const fadeFraction = Math.min(0.5, Math.max(0, options.fadeFraction ?? 0.15));
-  const maxZoom = options.maxZoom ?? 1.12;
+  const maxZoom = options.maxZoom ?? 1.15;
+  const subtitles = options.subtitles ?? "pill";
+  const crossfade = options.crossfade ?? true;
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Failed to acquire 2D canvas context.");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) {
+    throw new Error("Failed to create 2D canvas rendering context.");
+  }
 
-  const totalFrames = scenes.reduce(
-    (sum, s) => sum + Math.max(1, Math.round(s.durationSeconds * fps)),
-    0
+  // Pre-load all scene images in parallel
+  const loadedImages: HTMLImageElement[] = await Promise.all(
+    scenes.map((s) => loadImage(s.imageUrl))
   );
 
-  const images = await Promise.all(scenes.map((s) => loadImage(s.imageUrl)));
+  const sceneFrameCounts = scenes.map((s) =>
+    Math.max(1, Math.round(s.durationSeconds * fps))
+  );
+  const totalFrames = sceneFrameCounts.reduce((sum, n) => sum + n, 0);
 
   const frames: Uint8Array[] = [];
-  let renderedFrames = 0;
+  let frameIndex = 0;
 
-  for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex++) {
-    const scene = scenes[sceneIndex];
-    const img = images[sceneIndex];
-    const nextImg = images[sceneIndex + 1]; // undefined on the last scene
+  for (let sceneIdx = 0; sceneIdx < scenes.length; sceneIdx++) {
+    const img = loadedImages[sceneIdx];
+    const nextImg = sceneIdx + 1 < loadedImages.length ? loadedImages[sceneIdx + 1] : null;
+    const sceneText = scenes[sceneIdx].text;
+    const sceneFrames = sceneFrameCounts[sceneIdx];
 
-    const sceneFrameCount = Math.max(1, Math.round(scene.durationSeconds * fps));
-    const fadeFrameCount = Math.round(sceneFrameCount * fadeFraction);
+    const crossfadeFrames = crossfade && nextImg ? Math.min(Math.round(fps * 0.4), Math.floor(sceneFrames * 0.3)) : 0;
 
-    for (let f = 0; f < sceneFrameCount; f++) {
-      const zoomProgress = sceneFrameCount > 1 ? f / (sceneFrameCount - 1) : 0;
+    for (let f = 0; f < sceneFrames; f++) {
+      const zoomProgress = f / Math.max(1, sceneFrames - 1);
 
       ctx.clearRect(0, 0, width, height);
-      drawCoverFrame(ctx, img, width, height, zoomProgress, maxZoom);
 
-      // Cross-fade the last `fadeFrameCount` frames of this scene into the
-      // first frame pose of the next scene's image.
-      const framesFromEnd = sceneFrameCount - 1 - f;
-      if (nextImg && fadeFrameCount > 0 && framesFromEnd < fadeFrameCount) {
-        const fadeAlpha = 1 - framesFromEnd / fadeFrameCount;
+      // Render base scene frame
+      drawCoverFrame(ctx, img, width, height, zoomProgress, maxZoom, sceneIdx);
+
+      // Render crossfade into next scene
+      if (crossfadeFrames > 0 && f >= sceneFrames - crossfadeFrames && nextImg) {
+        const fadeAlpha = (f - (sceneFrames - crossfadeFrames)) / crossfadeFrames;
         ctx.save();
         ctx.globalAlpha = fadeAlpha;
-        drawCoverFrame(ctx, nextImg, width, height, 0, maxZoom);
+        drawCoverFrame(ctx, nextImg, width, height, 0, maxZoom, sceneIdx + 1);
         ctx.restore();
       }
 
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, "image/png")
-      );
-      if (!blob) throw new Error("canvas.toBlob() returned null while rendering a frame.");
+      // Render synchronized subtitles on top
+      drawSubtitles(ctx, sceneText, zoomProgress, width, height, subtitles);
 
-      frames.push(new Uint8Array(await blob.arrayBuffer()));
-      renderedFrames++;
-      options.onProgress?.(renderedFrames, totalFrames);
+      // Export canvas frame as PNG Uint8Array
+      const dataUrl = canvas.toDataURL("image/png");
+      const base64 = dataUrl.split(",")[1];
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      frames.push(bytes);
+
+      frameIndex++;
+      options.onProgress?.(frameIndex, totalFrames);
     }
   }
 

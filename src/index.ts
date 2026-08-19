@@ -1,54 +1,69 @@
 /**
  * smart-video-engine
  * -------------------
- * A free, browser-based script-to-video generator.
+ * A free, client-side script-to-video studio engine in JavaScript & TypeScript.
  *
- * Pipeline: script -> scenes -> (image per scene, cloud/free) +
- * (narration per scene, local WebGPU/WASM TTS) -> canvas compositing with
- * pan/zoom/fade -> ffmpeg.wasm muxing -> downloadable MP4.
- *
- * No server, no API key required for the default pipeline. Every stage is
- * swappable: bring your own image provider (e.g. a stock-photo API) or
- * scene splitter (e.g. an AI-assisted one) via constructor options.
- *
- * Requires a browser DOM throughout (canvas, Image, and — for muxing — a
- * page served with COOP/COEP headers for SharedArrayBuffer). Not intended
- * for server-side/Node use.
+ * Pipeline:
+ * 1. Script Parsing & Keyword Extraction (NLP)
+ * 2. Visual Synthesis (Multi-Model AI / Stock Media / Local GPU Inference)
+ * 3. Neural Speech Narration (Kokoro-82M WebGPU / WASM)
+ * 4. Ambient Background Music (BGM) & Dynamic Audio Ducking
+ * 5. Canvas Compositor with Ken Burns Motion, Crossfades & Subtitles
+ * 6. ffmpeg.wasm Video Muxer -> Downloadable MP4
  */
 
-import { splitScript, type Scene, type SceneSplitter } from "./scenes.js";
+import { splitScript, type Scene, type SceneSplitter, type SplitScriptOptions } from "./scenes.js";
 import {
   createPollinationsImageProvider,
+  createPixabayImageProvider,
+  createLocalInferenceProvider,
   type ImageProvider,
 } from "./imageProvider.js";
 import { VoiceGenerator, type VoiceSegment } from "./voice.js";
-import { composeFrames, type ComposedFrames } from "./compose.js";
+import { composeFrames, type ComposedFrames, type ComposeOptions } from "./compose.js";
 import { muxFramesToMp4 } from "./mux.js";
+import { generateBgmAudio, mixVoiceWithBgm, type BgmTrackOptions } from "./bgm.js";
 
-export type { Scene, SceneSplitter } from "./scenes.js";
+export type { Scene, SceneSplitter, SplitScriptOptions } from "./scenes.js";
+export { splitScript, extractKeywords, deriveEnhancedPrompt } from "./scenes.js";
 export type { ImageProvider } from "./imageProvider.js";
-export { createPollinationsImageProvider } from "./imageProvider.js";
+export {
+  createPollinationsImageProvider,
+  createPixabayImageProvider,
+  createLocalInferenceProvider,
+} from "./imageProvider.js";
 export type { VoiceSegment } from "./voice.js";
 export { VoiceGenerator } from "./voice.js";
-export type { ComposedFrames, SceneWithMedia } from "./compose.js";
+export type { ComposedFrames, SceneWithMedia, ComposeOptions } from "./compose.js";
 export { composeFrames } from "./compose.js";
 export { muxFramesToMp4 } from "./mux.js";
+export { generateBgmAudio, mixVoiceWithBgm, type BgmTrackOptions } from "./bgm.js";
 
 export interface SmartVideoEngineOptions {
   /** Custom scene-splitting strategy. Default: free client-side sentence grouping. */
   sceneSplitter?: SceneSplitter;
-  /** Custom image provider (e.g. stock photos). Default: free Pollinations cloud images. */
+  /** Custom image provider. Default: free Pollinations cloud images. */
   imageProvider?: ImageProvider;
   /** Kokoro voice preset. Default: "af_heart". */
   voice?: string;
   /** Skip downloading neural TTS model and use fast synthesized tones. Default: false */
   mockVoice?: boolean;
-  /** Output frame width. Default: 1024 */
+  /** Output frame width in pixels. Default: 1024 */
   width?: number;
-  /** Output frame height. Default: 1024 */
+  /** Output frame height in pixels. Default: 1024 */
   height?: number;
   /** Output frames per second. Default: 24 */
   fps?: number;
+  /** Subtitle styling: "pill" | "cinematic" | "karaoke" | "none". Default: "pill" */
+  subtitles?: "pill" | "cinematic" | "karaoke" | "none";
+  /** Background Music style: "ambient" | "lofi" | "cinematic" | "none". Default: "ambient" */
+  bgm?: "ambient" | "lofi" | "cinematic" | "none";
+  /** Background Music base volume (0.0 to 1.0). Default: 0.22 */
+  bgmVolume?: number;
+  /** Enable crossfade transitions between scenes. Default: true */
+  crossfade?: boolean;
+  /** Visual style preset for prompt enhancement: "cinematic" | "anime" | "cyberpunk" | "fantasy" | "none" */
+  style?: "cinematic" | "photorealistic" | "anime" | "cyberpunk" | "fantasy" | "none";
   /** Called with a coarse pipeline stage name and optional detail/progress. */
   onProgress?: (stage: string, detail?: string) => void;
 }
@@ -71,14 +86,26 @@ export class SmartVideoEngine {
   private readonly width: number;
   private readonly height: number;
   private readonly fps: number;
+  private readonly subtitles: "pill" | "cinematic" | "karaoke" | "none";
+  private readonly bgm: "ambient" | "lofi" | "cinematic" | "none";
+  private readonly bgmVolume: number;
+  private readonly crossfade: boolean;
   private readonly onProgress?: (stage: string, detail?: string) => void;
 
   constructor(options: SmartVideoEngineOptions = {}) {
-    this.sceneSplitter = options.sceneSplitter ?? ((script: string) => splitScript(script));
     this.width = options.width ?? 1024;
     this.height = options.height ?? 1024;
     this.fps = options.fps ?? 24;
+    this.subtitles = options.subtitles ?? "pill";
+    this.bgm = options.bgm ?? "ambient";
+    this.bgmVolume = options.bgmVolume ?? 0.22;
+    this.crossfade = options.crossfade ?? true;
     this.onProgress = options.onProgress;
+
+    this.sceneSplitter =
+      options.sceneSplitter ??
+      ((script: string) => splitScript(script, { style: options.style ?? "cinematic" }));
+
     this.imageProvider =
       options.imageProvider ??
       createPollinationsImageProvider({ width: this.width, height: this.height });
@@ -92,8 +119,13 @@ export class SmartVideoEngine {
   }
 
   /**
-   * Runs the full pipeline end to end: split script -> generate images ->
-   * generate narration -> composite frames -> mux to MP4.
+   * Runs the full end-to-end studio pipeline:
+   * 1. Split script & extract keywords
+   * 2. Generate/fetch scene visual media
+   * 3. Synthesize speech narration
+   * 4. Generate & mix background music (BGM) with audio ducking
+   * 5. Composite frames (Ken Burns + Crossfades + Subtitles)
+   * 6. Encode & mux into final MP4 video
    */
   async generate(script: string): Promise<GenerateVideoResult> {
     this.onProgress?.("splitting-scenes");
@@ -108,7 +140,7 @@ export class SmartVideoEngine {
     this.onProgress?.("generating-images", `0/${scenes.length}`);
     const imageUrls: string[] = [];
     for (let i = 0; i < scenes.length; i++) {
-      imageUrls.push(await this.imageProvider(scenes[i].imagePrompt));
+      imageUrls.push(await this.imageProvider(scenes[i].imagePrompt, scenes[i].keywords));
       this.onProgress?.("generating-images", `${i + 1}/${scenes.length}`);
     }
 
@@ -122,19 +154,48 @@ export class SmartVideoEngine {
     const composed = await composeFrames(
       scenes.map((scene, i) => ({
         imageUrl: imageUrls[i],
+        text: scene.text,
         durationSeconds: Math.max(1, voiceSegments[i].durationSeconds),
       })),
       {
         width: this.width,
         height: this.height,
         fps: this.fps,
+        subtitles: this.subtitles,
+        crossfade: this.crossfade,
         onProgress: (done, total) =>
           this.onProgress?.("compositing-frames", `${done}/${total}`),
       }
     );
 
+    this.onProgress?.("mixing-audio");
+    let audioWav = await concatenateWavSegments(voiceSegments);
+
+    // If BGM is enabled, synthesize and mix background track
+    if (this.bgm !== "none") {
+      const totalDuration = voiceSegments.reduce((sum, seg) => sum + seg.durationSeconds, 0);
+      const parsedWav = parseWav({ wav: audioWav, durationSeconds: totalDuration });
+
+      if (parsedWav.audioFormat === 3) {
+        // IEEE Float32 audio from Kokoro
+        const floatSamples = new Float32Array(
+          parsedWav.data.buffer,
+          parsedWav.data.byteOffset,
+          parsedWav.data.byteLength / 4
+        );
+        const bgmFloat = generateBgmAudio(totalDuration, {
+          style: this.bgm,
+          sampleRate: parsedWav.sampleRate,
+        });
+        const mixed = mixVoiceWithBgm(floatSamples, bgmFloat, {
+          volume: this.bgmVolume,
+          duckedVolume: this.bgmVolume * 0.5,
+        });
+        audioWav = encodeFloatWav(mixed, parsedWav.sampleRate, parsedWav.numChannels);
+      }
+    }
+
     this.onProgress?.("muxing-video");
-    const audioWav = await concatenateWavSegments(voiceSegments);
     const blob = await muxFramesToMp4(composed.frames, audioWav, {
       fps: composed.fps,
       onProgress: (message) => this.onProgress?.("muxing-video", message),
@@ -148,11 +209,34 @@ export class SmartVideoEngine {
 }
 
 /**
- * Concatenates multiple mono/stereo PCM WAV segments (as produced by
- * VoiceGenerator) into a single WAV buffer, in order, back to back with no
- * gaps. Assumes all segments share the same format (true for Kokoro output
- * from a single model instance).
+ * Encodes Float32 samples into a standard IEEE Float32 WAV ArrayBuffer.
  */
+function encodeFloatWav(samples: Float32Array, sampleRate: number, numChannels: number): ArrayBuffer {
+  const dataByteLength = samples.length * 4;
+  const buffer = new ArrayBuffer(44 + dataByteLength);
+  const view = new DataView(buffer);
+
+  writeAscii(view, 0, "RIFF");
+  view.setUint32(4, 36 + dataByteLength, true);
+  writeAscii(view, 8, "WAVE");
+  writeAscii(view, 12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 3, true); // IEEE float format
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * numChannels * 4, true);
+  view.setUint16(32, numChannels * 4, true);
+  view.setUint16(34, 32, true);
+  writeAscii(view, 36, "data");
+  view.setUint32(40, dataByteLength, true);
+
+  const floatView = new Float32Array(buffer, 44, samples.length);
+  floatView.set(samples);
+
+  return buffer;
+}
+
+/** Concatenates multiple WAV segments into a single WAV buffer. */
 async function concatenateWavSegments(segments: VoiceSegment[]): Promise<ArrayBuffer> {
   if (segments.length === 1) return segments[0].wav;
 
@@ -171,8 +255,8 @@ async function concatenateWavSegments(segments: VoiceSegment[]): Promise<ArrayBu
   view.setUint32(4, 36 + totalDataLength, true);
   writeAscii(view, 8, "WAVE");
   writeAscii(view, 12, "fmt ");
-  view.setUint32(16, 16, true); // fmt chunk size
-  view.setUint16(20, audioFormat, true); // Preserve format (1 for PCM int, 3 for IEEE float)
+  view.setUint32(16, 16, true);
+  view.setUint16(20, audioFormat, true);
   view.setUint16(22, numChannels, true);
   view.setUint32(24, sampleRate, true);
   view.setUint32(28, byteRate, true);

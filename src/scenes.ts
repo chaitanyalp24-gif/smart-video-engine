@@ -1,45 +1,82 @@
 /**
- * scenes
- * ------
- * Splits a script into scenes. Each scene becomes one generated image +
- * one narrated audio segment in the final video.
- *
- * Default strategy is a simple, free, client-side heuristic: group
- * sentences into scenes of roughly `sentencesPerScene` sentences each.
- * No network call, no API key, works offline.
- *
- * `splitScript` is intentionally a plain function (not a class) so a
- * smarter, AI-assisted splitter (e.g. one that asks an LLM to pick natural
- * scene breaks and write better image prompts) can be swapped in later by
- * passing a different function with the same signature — no changes
- * needed elsewhere in the pipeline.
+ * scenes & keyword extraction
+ * ---------------------------
+ * Splits a script into scenes, extracts visual keywords, and derives
+ * enhanced image prompts for AI and stock footage providers.
  */
 
 export interface Scene {
   /** The narration text for this scene (fed to the TTS engine). */
   text: string;
-  /** The prompt used for image generation. Defaults to the scene text itself. */
+  /** The prompt used for image generation. */
   imagePrompt: string;
+  /** Extracted key visual search terms (for stock media search). */
+  keywords?: string[];
 }
 
 export interface SplitScriptOptions {
   /** How many sentences to group into one scene. Default: 2. */
   sentencesPerScene?: number;
+  /** Visual style enhancement to append to prompts (e.g. "cinematic", "anime", "lofi"). */
+  style?: "cinematic" | "photorealistic" | "anime" | "cyberpunk" | "fantasy" | "none";
+}
+
+const STOP_WORDS = new Set([
+  "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are",
+  "as", "at", "be", "because", "been", "before", "being", "below", "between", "both", "but",
+  "by", "could", "did", "do", "does", "doing", "down", "during", "each", "few", "for", "from",
+  "further", "had", "has", "have", "having", "he", "her", "here", "hers", "herself", "him",
+  "himself", "his", "how", "i", "if", "in", "into", "is", "it", "its", "itself", "just", "me",
+  "more", "most", "my", "myself", "no", "nor", "not", "now", "of", "off", "on", "once", "only",
+  "or", "other", "our", "ours", "ourselves", "out", "over", "own", "same", "she", "should", "so",
+  "some", "such", "than", "that", "the", "their", "theirs", "them", "themselves", "then", "there",
+  "these", "they", "this", "those", "through", "to", "too", "under", "until", "up", "very", "was",
+  "we", "were", "what", "when", "where", "which", "while", "who", "whom", "why", "with", "would",
+  "you", "your", "yours", "yourself", "yourselves"
+]);
+
+/**
+ * Extracts salient search keywords from a sentence for stock photo/video retrieval.
+ */
+export function extractKeywords(text: string): string[] {
+  const words = text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, "")
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
+
+  // Deduplicate and return top 5
+  return Array.from(new Set(words)).slice(0, 5);
 }
 
 /**
- * Splits raw text into sentences using a conservative regex: breaks on
- * ./!/? followed by whitespace and a capital letter or end of string,
- * while trying to avoid common abbreviations (Mr., Dr., etc.) and decimals.
+ * Derives an enhanced prompt by applying a style preset.
+ */
+export function deriveEnhancedPrompt(
+  text: string,
+  style: SplitScriptOptions["style"] = "cinematic"
+): string {
+  const styleModifiers: Record<string, string> = {
+    cinematic: "cinematic lighting, highly detailed, photorealistic 8k, award winning cinematography, masterpiece",
+    photorealistic: "sharp focus, ultra detailed 8k photography, Hasselblad photo, realistic lighting",
+    anime: "studio ghibli aesthetic, makoto shinkai style, vibrant colors, detailed anime digital art",
+    cyberpunk: "cyberpunk, neon glow, holographic reflections, futuristic city, blade runner style",
+    fantasy: "ethereal fantasy, mystical glowing atmosphere, epic digital matte painting, unreal engine 5",
+    none: "",
+  };
+
+  const modifier = styleModifiers[style ?? "cinematic"] || "";
+  return modifier ? `${text.trim()}, ${modifier}` : text.trim();
+}
+
+/**
+ * Splits raw text into sentences.
  */
 function splitIntoSentences(text: string): string[] {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (!normalized) return [];
 
-  // Split on sentence-ending punctuation followed by a space, but avoid
-  // breaking on common abbreviations or decimal numbers.
   const raw = normalized.match(/[^.!?]+[.!?]+(?:\s|$)/g) ?? [normalized];
-
   const sentences: string[] = [];
   for (const chunk of raw) {
     const trimmed = chunk.trim();
@@ -50,25 +87,27 @@ function splitIntoSentences(text: string): string[] {
 }
 
 /**
- * Free, client-side, keyless scene splitter. Groups sentences into scenes
- * and uses each scene's own text as its image prompt.
+ * Client-side scene splitter with keyword extraction and visual styling.
  */
 export function splitScript(
   script: string,
   options: SplitScriptOptions = {}
 ): Scene[] {
   const sentencesPerScene = Math.max(1, options.sentencesPerScene ?? 2);
+  const style = options.style ?? "cinematic";
   const sentences = splitIntoSentences(script);
 
   const scenes: Scene[] = [];
   for (let i = 0; i < sentences.length; i += sentencesPerScene) {
     const group = sentences.slice(i, i + sentencesPerScene);
     const text = group.join(" ");
-    scenes.push({ text, imagePrompt: text });
+    const imagePrompt = deriveEnhancedPrompt(text, style);
+    const keywords = extractKeywords(text);
+
+    scenes.push({ text, imagePrompt, keywords });
   }
 
   return scenes;
 }
 
-/** Function signature a custom scene-splitting strategy must implement. */
 export type SceneSplitter = (script: string) => Scene[] | Promise<Scene[]>;
