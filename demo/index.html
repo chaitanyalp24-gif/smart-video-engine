@@ -399,23 +399,40 @@
     
     <div class="preset-row">
       <span style="font-size:0.8rem; color:var(--text-secondary); align-self:center;">Presets:</span>
-      <button class="preset-btn" data-preset="fox">🦊 Snowy Fox</button>
-      <button class="preset-btn" data-preset="ocean">🌊 Deep Ocean</button>
-      <button class="preset-btn" data-preset="space">🚀 Nebula Voyage</button>
+      <button class="preset-btn" data-preset="fox">🦊 Snowy Fox (EN)</button>
+      <button class="preset-btn" data-preset="spanish">🇪🇸 Bosque Nevado (ES)</button>
+      <button class="preset-btn" data-preset="french">🇫🇷 Forêt Enneigée (FR)</button>
+      <button class="preset-btn" data-preset="hindi">🇮🇳 सुन्दर वन (HI)</button>
+      <button class="preset-btn" data-preset="japanese">🇯🇵 静かな雪の森 (JA)</button>
       <button class="preset-btn" data-preset="cyberpunk">🌆 Cyberpunk City</button>
     </div>
 
     <div class="settings-grid">
       <div>
-        <label for="voiceSelect">Kokoro Voice</label>
+        <label for="languageSelect">Voice Language</label>
+        <select id="languageSelect">
+          <option value="en" selected>🇺🇸/🇬🇧 English</option>
+          <option value="es">🇪🇸 Spanish (Español)</option>
+          <option value="fr">🇫🇷 French (Français)</option>
+          <option value="it">🇮🇹 Italian (Italiano)</option>
+          <option value="hi">🇮🇳 Hindi (हिन्दी)</option>
+          <option value="ja">🇯🇵 Japanese (日本語)</option>
+          <option value="zh">🇨🇳 Mandarin Chinese (中文)</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="voiceSelect">Speaker Voice</label>
         <select id="voiceSelect">
-          <option value="af_heart" selected>af_heart (Female, American)</option>
-          <option value="af_bella">af_bella (Female, Expressive)</option>
-          <option value="af_nicole">af_nicole (Female, Warm)</option>
-          <option value="af_sarah">af_sarah (Female, Clear)</option>
-          <option value="af_sky">af_sky (Female, Soft)</option>
-          <option value="am_adam">am_adam (Male, Calm)</option>
-          <option value="am_michael">am_michael (Male, Deep)</option>
+          <option value="af_heart" selected>af_heart (Female, Warm, US)</option>
+          <option value="af_bella">af_bella (Female, Expressive, US)</option>
+          <option value="af_nicole">af_nicole (Female, Clear, US)</option>
+          <option value="af_sarah">af_sarah (Female, Gentle, US)</option>
+          <option value="af_sky">af_sky (Female, Soft, US)</option>
+          <option value="am_adam">am_adam (Male, Calm, US)</option>
+          <option value="am_michael">am_michael (Male, Deep, US)</option>
+          <option value="bf_emma">bf_emma (Female, British)</option>
+          <option value="bm_george">bm_george (Male, British)</option>
         </select>
       </div>
 
@@ -549,10 +566,30 @@
     } from "../dist/index.js";
 
     const PRESETS = {
-      fox: "A lone fox walks through a quiet snowy forest at dawn. Sunlight breaks through tall frosted trees, casting long golden shadows. In the distance, a crystal-clear river sparkles under the crisp morning air.",
-      ocean: "Deep beneath the ocean surface, glowing bioluminescent jellyfish drift through the azure abyss. Ancient coral reefs shimmer with vibrant neon colors. A graceful sea turtle glides into the peaceful deep blue.",
-      space: "A sleek spacecraft cruises past a glowing magenta nebula. Billions of distant stars illuminate the cosmic horizon. Asteroids drift peacefully in the silent majesty of deep space.",
-      cyberpunk: "Rain falls on the neon-drenched streets of a futuristic Tokyo alley. Flying vehicles glide between towering holographic skyscrapers. Reflections of bright cyan and magenta shimmer across wet asphalt."
+      fox: {
+        text: "A lone fox walks through a quiet snowy forest at dawn. Sunlight breaks through tall frosted trees, casting long golden shadows. In the distance, a crystal-clear river sparkles under the crisp morning air.",
+        voice: "af_heart"
+      },
+      spanish: {
+        text: "Un zorro solitario camina por un bosque nevado y silencioso al amanecer. La luz del sol atraviesa los altos árboles helados, proyectando largas sombras doradas. A lo lejos, un río cristalino brilla bajo el aire fresco de la mañana.",
+        voice: "ef_dora"
+      },
+      french: {
+        text: "Un renard solitaire marche dans une forêt enneigée et paisible au lever du soleil. La lumière du soleil traverse les grands arbres couverts de givre, projetant de longues ombres dorées. Au loin, une rivière cristalline étincelle sous l'air frais del du matin.",
+        voice: "ff_siwis"
+      },
+      hindi: {
+        text: "सुबह के समय एक अकेला लोमड़ी शांत बर्फीले जंगल से होकर गुजरता है। सूर्य की किरणें जमे हुए ऊंचे पेड़ों से होकर गुजरती हैं, लंबी सुनहरी छायाएं डालती हैं। दूरी में, एक साफ नदी सुबह की ताजा हवा में चमकती है।",
+        voice: "hf_alpha"
+      },
+      japanese: {
+        text: "静かな雪の森を、一匹のキツネが夜明けの光の中で歩いています。霜に覆われた高い木々の隙間から日光が差し込み、黄金色の長い影を落としています。遠くでは、清らかな川が透き通った朝の空気の中で輝いています。",
+        voice: "jf_alpha"
+      },
+      cyberpunk: {
+        text: "Rain falls on the neon-drenched streets of a futuristic Tokyo alley. Flying vehicles glide between towering holographic skyscrapers. Reflections of bright cyan and magenta shimmer across wet asphalt.",
+        voice: "af_bella"
+      }
     };
 
     // DOM Elements
@@ -609,12 +646,72 @@
       }
     })();
 
+    const LANGUAGE_VOICES = {
+      en: [
+        { value: "af_heart", label: "af_heart (Female, Warm, US)" },
+        { value: "af_bella", label: "af_bella (Female, Expressive, US)" },
+        { value: "af_nicole", label: "af_nicole (Female, Clear, US)" },
+        { value: "af_sarah", label: "af_sarah (Female, Gentle, US)" },
+        { value: "af_sky", label: "af_sky (Female, Soft, US)" },
+        { value: "am_adam", label: "am_adam (Male, Calm, US)" },
+        { value: "am_michael", label: "am_michael (Male, Deep, US)" },
+        { value: "bf_emma", label: "bf_emma (Female, British)" },
+        { value: "bm_george", label: "bm_george (Male, British)" }
+      ],
+      es: [
+        { value: "ef_dora", label: "ef_dora (Female, Spanish)" },
+        { value: "em_alex", label: "em_alex (Male, Spanish)" }
+      ],
+      fr: [
+        { value: "ff_siwis", label: "ff_siwis (Female, French)" }
+      ],
+      it: [
+        { value: "if_sara", label: "if_sara (Female, Italian)" },
+        { value: "im_nicola", label: "im_nicola (Male, Italian)" }
+      ],
+      hi: [
+        { value: "hf_alpha", label: "hf_alpha (Female, Hindi)" },
+        { value: "hm_beta", label: "hm_beta (Male, Hindi)" }
+      ],
+      ja: [
+        { value: "jf_alpha", label: "jf_alpha (Female, Japanese)" },
+        { value: "jm_kenta", label: "jm_kenta (Male, Japanese)" }
+      ],
+      zh: [
+        { value: "zf_xiaobei", label: "zf_xiaobei (Female, Mandarin)" },
+        { value: "zm_yunjian", label: "zm_yunjian (Male, Mandarin)" }
+      ]
+    };
+
+    function updateVoiceDropdown(lang, selectedVoice) {
+      const voiceSelect = document.getElementById("voiceSelect");
+      if (!voiceSelect) return;
+      const list = LANGUAGE_VOICES[lang] || LANGUAGE_VOICES.en;
+      voiceSelect.innerHTML = "";
+      list.forEach(item => {
+        const opt = document.createElement("option");
+        opt.value = item.value;
+        opt.textContent = item.label;
+        if (selectedVoice && item.value === selectedVoice) opt.selected = true;
+        voiceSelect.appendChild(opt);
+      });
+    }
+
+    document.getElementById("languageSelect")?.addEventListener("change", (e) => {
+      updateVoiceDropdown(e.target.value);
+    });
+
     // Preset Buttons
     document.querySelectorAll(".preset-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const key = btn.dataset.preset;
         if (PRESETS[key]) {
-          document.getElementById("script").value = PRESETS[key];
+          document.getElementById("script").value = PRESETS[key].text;
+          const langMap = { fox: "en", spanish: "es", french: "fr", hindi: "hi", japanese: "ja", cyberpunk: "en" };
+          const lang = langMap[key] || "en";
+          const langSelect = document.getElementById("languageSelect");
+          if (langSelect) langSelect.value = lang;
+          updateVoiceDropdown(lang, PRESETS[key].voice);
         }
       });
     });
@@ -747,20 +844,28 @@
           cardTitle.style.marginBottom = "0.4rem";
           cardTitle.textContent = `Scene ${i + 1} (${Math.round(seg?.durationSeconds ?? 0)}s)`;
 
+          const imgEl = document.createElement("img");
+          const imgUrl = result.imageUrls ? result.imageUrls[i] : "";
+          if (imgUrl) {
+            imgEl.src = imgUrl.startsWith("http") && window.location.hostname === "localhost"
+              ? `/api/proxy-image?url=${encodeURIComponent(imgUrl)}`
+              : imgUrl;
+          }
+          imgEl.alt = `Scene ${i + 1} Visual`;
+
           const textP = document.createElement("p");
           textP.textContent = scene.text;
+
+          card.appendChild(cardTitle);
+          if (imgUrl) card.appendChild(imgEl);
+          card.appendChild(textP);
 
           if (seg?.wav) {
             const wavBlob = new Blob([seg.wav], { type: "audio/wav" });
             const audio = document.createElement("audio");
             audio.controls = true;
             audio.src = URL.createObjectURL(wavBlob);
-            card.appendChild(cardTitle);
-            card.appendChild(textP);
             card.appendChild(audio);
-          } else {
-            card.appendChild(cardTitle);
-            card.appendChild(textP);
           }
 
           scenesGrid.appendChild(card);

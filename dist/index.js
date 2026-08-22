@@ -29,7 +29,7 @@ const STOP_WORDS = new Set([
 export function extractKeywords(text) {
   const words = text
     .toLowerCase()
-    .replace(/[^\w\s]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
     .split(/\s+/)
     .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
   return Array.from(new Set(words)).slice(0, 5);
@@ -51,7 +51,7 @@ export function deriveEnhancedPrompt(text, style = "cinematic") {
 function splitIntoSentences(text) {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (!normalized) return [];
-  const raw = normalized.match(/[^.!?]+[.!?]+(?:\s|$)/g) ?? [normalized];
+  const raw = normalized.match(/[^.!?\u3002\u0964]+[.!?\u3002\u0964]+(?:\s|$)/gu) ?? [normalized];
   const sentences = [];
   for (const chunk of raw) {
     const trimmed = chunk.trim();
@@ -646,7 +646,15 @@ export async function composeFrames(scenes, options = {}) {
     throw new Error("Failed to create 2D canvas rendering context.");
   }
 
-  const loadedImages = await Promise.all(scenes.map((s) => loadImage(s.imageUrl)));
+  const loadedImages = [];
+  for (let i = 0; i < scenes.length; i++) {
+    const img = await loadImage(scenes[i].imageUrl);
+    try {
+      if (img.decode) await img.decode();
+    } catch (_) {}
+    loadedImages.push(img);
+  }
+
   const sceneFrameCounts = scenes.map((s) => Math.max(1, Math.round(s.durationSeconds * fps)));
   const totalFrames = sceneFrameCounts.reduce((sum, n) => sum + n, 0);
 
@@ -853,7 +861,7 @@ export class SmartVideoEngine {
 
     const url = URL.createObjectURL(blob);
     this.onProgress?.("done");
-    return { blob, url, scenes, voiceSegments };
+    return { blob, url, scenes, voiceSegments, imageUrls };
   }
 }
 

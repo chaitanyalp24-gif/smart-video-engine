@@ -44,6 +44,8 @@ export interface SmartVideoEngineOptions {
   sceneSplitter?: SceneSplitter;
   /** Custom image provider. Default: free Pollinations cloud images. */
   imageProvider?: ImageProvider;
+  /** Voice language code: "en" | "es" | "fr" | "it" | "hi" | "ja" | "zh". Default: "en" */
+  language?: "en" | "es" | "fr" | "it" | "hi" | "ja" | "zh";
   /** Kokoro voice preset. Default: "af_heart". */
   voice?: string;
   /** Skip downloading neural TTS model and use fast synthesized tones. Default: false */
@@ -75,6 +77,8 @@ export interface GenerateVideoResult {
   url: string;
   /** The scenes that were generated, for inspection/debugging. */
   scenes: Scene[];
+  /** Generated image URLs per scene. */
+  imageUrls: string[];
   /** Per-scene narration audio, for inspection/debugging. */
   voiceSegments: VoiceSegment[];
 }
@@ -204,7 +208,7 @@ export class SmartVideoEngine {
     const url = URL.createObjectURL(blob);
 
     this.onProgress?.("done");
-    return { blob, url, scenes, voiceSegments };
+    return { blob, url, scenes, voiceSegments, imageUrls };
   }
 }
 

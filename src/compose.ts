@@ -345,10 +345,15 @@ export async function composeFrames(
     throw new Error("Failed to create 2D canvas rendering context.");
   }
 
-  // Pre-load all scene images in parallel
-  const loadedImages: HTMLImageElement[] = await Promise.all(
-    scenes.map((s) => loadImage(s.imageUrl))
-  );
+  // Pre-load all scene images sequentially to prevent concurrent request drops
+  const loadedImages: HTMLImageElement[] = [];
+  for (let i = 0; i < scenes.length; i++) {
+    const img = await loadImage(scenes[i].imageUrl);
+    try {
+      if (img.decode) await img.decode();
+    } catch (_) {}
+    loadedImages.push(img);
+  }
 
   const sceneFrameCounts = scenes.map((s) =>
     Math.max(1, Math.round(s.durationSeconds * fps))

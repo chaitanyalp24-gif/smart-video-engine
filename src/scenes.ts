@@ -41,7 +41,7 @@ const STOP_WORDS = new Set([
 export function extractKeywords(text: string): string[] {
   const words = text
     .toLowerCase()
-    .replace(/[^\w\s]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
     .split(/\s+/)
     .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
 
@@ -70,13 +70,13 @@ export function deriveEnhancedPrompt(
 }
 
 /**
- * Splits raw text into sentences.
+ * Splits raw text into sentences across multiple languages (supporting ASCII ., !, ? and CJK/Devanagari 。 ।).
  */
 function splitIntoSentences(text: string): string[] {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (!normalized) return [];
 
-  const raw = normalized.match(/[^.!?]+[.!?]+(?:\s|$)/g) ?? [normalized];
+  const raw = normalized.match(/[^.!?\u3002\u0964]+[.!?\u3002\u0964]+(?:\s|$)/gu) ?? [normalized];
   const sentences: string[] = [];
   for (const chunk of raw) {
     const trimmed = chunk.trim();

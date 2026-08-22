@@ -125,6 +125,7 @@ export declare function muxFramesToMp4(
 export interface SmartVideoEngineOptions {
   sceneSplitter?: SceneSplitter;
   imageProvider?: ImageProvider;
+  language?: "en" | "es" | "fr" | "it" | "hi" | "ja" | "zh";
   voice?: string;
   mockVoice?: boolean;
   width?: number;

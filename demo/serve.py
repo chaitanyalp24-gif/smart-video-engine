@@ -87,7 +87,7 @@ class SmartVideoServerHandler(http.server.SimpleHTTPRequestHandler):
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
                         "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
                     })
-                    with _no_proxy_opener.open(req, timeout=45) as resp:
+                    with _no_proxy_opener.open(req, timeout=90) as resp:
                         data = resp.read()
                         content_type = resp.headers.get("Content-Type", "image/jpeg")
 
