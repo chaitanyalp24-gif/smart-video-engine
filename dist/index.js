@@ -224,12 +224,66 @@ export function mixVoiceWithBgm(voiceSamples, bgmSamples, options = {}) {
   return mixed;
 }
 
+export function getKokoroLangCode(voice, language) {
+  if (language) {
+    const langMap = {
+      en: "a",
+      "en-us": "a",
+      "en-gb": "b",
+      es: "e",
+      fr: "f",
+      it: "i",
+      hi: "h",
+      ja: "j",
+      zh: "z",
+      a: "a",
+      b: "b",
+      e: "e",
+      f: "f",
+      i: "i",
+      h: "h",
+      j: "j",
+      z: "z",
+    };
+    if (langMap[String(language).toLowerCase()]) return langMap[String(language).toLowerCase()];
+  }
+  const prefix = String(voice || "").slice(0, 2).toLowerCase();
+  switch (prefix) {
+    case "af":
+    case "am":
+      return "a";
+    case "bf":
+    case "bm":
+      return "b";
+    case "ef":
+    case "em":
+      return "e";
+    case "ff":
+      return "f";
+    case "if":
+    case "im":
+      return "i";
+    case "hf":
+    case "hm":
+      return "h";
+    case "jf":
+    case "jm":
+      return "j";
+    case "zf":
+    case "zm":
+      return "z";
+    default:
+      return "a";
+  }
+}
+
 // --- voice ---
 export class VoiceGenerator {
   constructor(options = {}) {
     this.modelId = options.modelId ?? "onnx-community/Kokoro-82M-v1.0-ONNX";
     this.dtype = options.dtype ?? "q8";
     this.voice = options.voice ?? "af_heart";
+    this.language = options.language;
     this.mock = options.mock ?? false;
     this.onProgress = options.onProgress;
     this.tts = null;
@@ -288,7 +342,8 @@ export class VoiceGenerator {
     }
 
     try {
-      const audio = await this.tts.generate(text, { voice: this.voice });
+      const langCode = getKokoroLangCode(this.voice, this.language);
+      const audio = await this.tts.generate(text, { voice: this.voice, language: langCode });
       const wav = await toWavArrayBuffer(audio);
       const durationSeconds = parseWavDuration(wav);
       return { wav, durationSeconds };
@@ -781,6 +836,7 @@ export class SmartVideoEngine {
 
     this.voiceGenerator = new VoiceGenerator({
       voice: options.voice,
+      language: options.language,
       mock: options.mockVoice,
       onProgress: (status, progress) =>
         this.onProgress?.("voice-model-loading", `${status}${progress != null ? ` (${progress}%)` : ""}`),

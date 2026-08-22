@@ -741,6 +741,7 @@
         return;
       }
 
+      const language = document.getElementById("languageSelect").value;
       const voice = document.getElementById("voiceSelect").value;
       const subtitles = document.getElementById("subtitlesSelect").value;
       const bgm = document.getElementById("bgmSelect").value;
@@ -774,6 +775,7 @@
         }
 
         const engine = new SmartVideoEngine({
+          language,
           voice,
           mockVoice,
           width: res,

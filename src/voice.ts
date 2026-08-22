@@ -15,6 +15,8 @@
 export interface VoiceGeneratorOptions {
   /** Hugging Face model id. Default: "onnx-community/Kokoro-82M-v1.0-ONNX" */
   modelId?: string;
+  /** Language code ("en" | "es" | "fr" | "it" | "hi" | "ja" | "zh") or Kokoro code ("a", "b", "e", "f", "i", "h", "j", "z"). */
+  language?: string;
   /** Voice preset. Run VoiceGenerator.listVoices() after init() for the full list. Default: "af_heart" */
   voice?: string;
   /** Skip model download and use synthesized speech tones (useful for instant pipeline tests). Default: false */
@@ -37,7 +39,7 @@ export interface VoiceSegment {
 interface KokoroTTSLike {
   generate(
     text: string,
-    options?: { voice?: string }
+    options?: { voice?: string; language?: string }
   ): Promise<{ toWav(): ArrayBuffer }>;
   list_voices?: () => string[];
 }
@@ -46,16 +48,72 @@ interface NavigatorWithGPU {
   gpu?: { requestAdapter: () => Promise<unknown | null> };
 }
 
+export function getKokoroLangCode(voice: string, language?: string): string {
+  if (language) {
+    const langMap: Record<string, string> = {
+      en: "a",
+      "en-us": "a",
+      "en-gb": "b",
+      es: "e",
+      fr: "f",
+      it: "i",
+      hi: "h",
+      ja: "j",
+      zh: "z",
+      a: "a",
+      b: "b",
+      e: "e",
+      f: "f",
+      i: "i",
+      h: "h",
+      j: "j",
+      z: "z",
+    };
+    if (langMap[language.toLowerCase()]) return langMap[language.toLowerCase()];
+  }
+
+  const prefix = voice.slice(0, 2).toLowerCase();
+  switch (prefix) {
+    case "af":
+    case "am":
+      return "a";
+    case "bf":
+    case "bm":
+      return "b";
+    case "ef":
+    case "em":
+      return "e";
+    case "ff":
+      return "f";
+    case "if":
+    case "im":
+      return "i";
+    case "hf":
+    case "hm":
+      return "h";
+    case "jf":
+    case "jm":
+      return "j";
+    case "zf":
+    case "zm":
+      return "z";
+    default:
+      return "a";
+  }
+}
+
 export class VoiceGenerator {
   private tts: KokoroTTSLike | null = null;
   private readonly modelId: string;
   private readonly voice: string;
+  private readonly language?: string;
   private readonly mock: boolean;
   private readonly onProgress?: (status: string, progress?: number) => void;
 
   constructor(options: VoiceGeneratorOptions = {}) {
     this.modelId = options.modelId ?? "onnx-community/Kokoro-82M-v1.0-ONNX";
     this.voice = options.voice ?? "af_heart";
+    this.language = options.language;
     this.mock = options.mock ?? false;
     this.onProgress = options.onProgress;
   }
@@ -96,7 +154,8 @@ export class VoiceGenerator {
   async generate(text: string): Promise<VoiceSegment> {
     if (this.tts) {
       try {
-        const audio = await this.tts.generate(text, { voice: this.voice });
+        const langCode = getKokoroLangCode(this.voice, this.language);
+        const audio = await this.tts.generate(text, { voice: this.voice, language: langCode });
         const wav = await toWavArrayBuffer(audio);
 
         return {

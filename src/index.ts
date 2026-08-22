@@ -116,6 +116,7 @@ export class SmartVideoEngine {
 
     this.voiceGenerator = new VoiceGenerator({
       voice: options.voice,
+      language: options.language,
       mock: options.mockVoice,
       onProgress: (status, progress) =>
         this.onProgress?.("voice-model-loading", `${status}${progress != null ? ` (${progress}%)` : ""}`),
